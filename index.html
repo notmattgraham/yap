@@ -236,6 +236,8 @@
       align-items: center;
       width: max-content;
       gap: 18px;
+    }
+    .viral-track.play {
       animation: viral-scroll 40s linear infinite;
     }
     .viral-marquee:hover .viral-track { animation-play-state: paused; }
@@ -689,6 +691,38 @@
 
     tick();
     var timer = setInterval(tick, 1000);
+  })();
+
+  // Viral carousel: don't start the scroll animation until every image in the
+  // track has actually decoded. Starting it immediately (before ~34 inlined
+  // images finish decoding on slower phones) lets the track's real width
+  // change out from under a running % -based transform — the animation then
+  // drifts, stutters, and can end up translated fully past the visible mask,
+  // which looks like the whole carousel "disappearing."
+  (function () {
+    var tracks = document.querySelectorAll('.viral-track');
+    tracks.forEach(function (track) {
+      var imgs = Array.prototype.slice.call(track.querySelectorAll('img'));
+      var settled = false;
+      function start() {
+        if (settled) return;
+        settled = true;
+        track.classList.add('play');
+      }
+      var decodePromises = imgs.map(function (img) {
+        if (img.decode) {
+          return img.decode().catch(function () {});
+        }
+        if (img.complete) return Promise.resolve();
+        return new Promise(function (resolve) {
+          img.addEventListener('load', resolve, { once: true });
+          img.addEventListener('error', resolve, { once: true });
+        });
+      });
+      Promise.all(decodePromises).then(start);
+      // Safety net: never leave it frozen if decode() hangs on some device.
+      setTimeout(start, 1500);
+    });
   })();
 </script>
 </body>
